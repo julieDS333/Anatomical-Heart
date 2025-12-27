@@ -3,260 +3,244 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Anatomical Heart V2 - Gesture Control</title>
+    <title>Anatomical Particle System - Lungs & Heart</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Inter', -apple-system, sans-serif; }
+        body { margin: 0; background: #08080a; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         canvas { display: block; }
 
-        /* Modern Glassmorphism UI */
-        #ui-panel {
-            position: absolute; top: 30px; left: 30px;
-            background: rgba(15, 15, 15, 0.8); backdrop-filter: blur(20px);
-            border-radius: 20px; padding: 25px; color: white;
-            border: 1px solid rgba(255, 255, 255, 0.1); z-index: 100; width: 300px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        #overlay {
+            position: absolute; top: 30px; left: 30px; z-index: 10;
+            background: rgba(15, 15, 20, 0.85); backdrop-filter: blur(15px);
+            padding: 25px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1);
+            width: 280px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
         }
 
-        h2 { margin: 0; font-weight: 600; font-size: 1.4rem; color: #ff4d4d; letter-spacing: -0.5px; }
-        .subtitle { font-size: 0.7rem; opacity: 0.5; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; }
-        
-        .control-group { margin-bottom: 20px; }
-        label { display: block; font-size: 0.75rem; margin-bottom: 8px; color: #eee; }
-        
-        input[type="range"] { width: 100%; accent-color: #ff4d4d; cursor: pointer; }
-        
-        .status-badge {
-            display: inline-block; padding: 4px 10px; border-radius: 50px;
-            font-size: 0.65rem; font-weight: bold; background: #333; margin-top: 10px;
-        }
-        .status-active { background: #00ff88; color: #000; }
-        .status-locked { background: #4da6ff; color: #000; }
+        h1 { font-size: 1.2rem; margin: 0; color: #00d4ff; text-transform: uppercase; letter-spacing: 2px; }
+        .desc { font-size: 0.7rem; opacity: 0.6; margin-bottom: 20px; }
 
-        #video-container {
+        .control { margin-bottom: 15px; }
+        label { display: block; font-size: 0.7rem; margin-bottom: 5px; opacity: 0.8; }
+        select, input { 
+            width: 100%; background: #1a1a24; border: 1px solid #333; 
+            color: white; padding: 10px; border-radius: 8px; cursor: pointer;
+        }
+
+        .status-box { 
+            margin-top: 20px; padding: 12px; border-radius: 10px; 
+            background: rgba(0, 212, 255, 0.1); border-left: 4px solid #00d4ff;
+        }
+        .status-label { font-size: 0.6rem; text-transform: uppercase; opacity: 0.7; }
+        .status-val { font-family: monospace; font-size: 1rem; color: #00d4ff; display: block; }
+
+        #video-preview {
             position: absolute; bottom: 30px; right: 30px;
-            width: 220px; height: 165px; border-radius: 15px;
-            overflow: hidden; border: 2px solid rgba(255,255,255,0.1);
-            transform: scaleX(-1);
-        }
-        video { width: 100%; height: 100%; object-fit: cover; }
-        
-        .gesture-hint {
-            font-size: 0.75rem; background: rgba(255,255,255,0.05);
-            padding: 10px; border-radius: 10px; margin-top: 15px; border-left: 3px solid #ff4d4d;
+            width: 200px; height: 150px; border-radius: 15px;
+            border: 2px solid rgba(0, 212, 255, 0.3); transform: scaleX(-1); object-fit: cover;
         }
     </style>
 </head>
 <body>
 
-    <div id="ui-panel">
-        <h2>ANATOMICAL CORE</h2>
-        <div class="subtitle">Procedural Organ Rendering</div>
-        
-        <div class="control-group">
-            <label>Manual Pulse Override (BPM)</label>
-            <input type="range" id="bpmSlider" min="40" max="180" value="70">
-            <div style="display: flex; justify-content: space-between; font-size: 0.7rem; margin-top: 5px; opacity: 0.6;">
-                <span>40</span> <span id="bpmDisplay">70 BPM</span> <span>180</span>
-            </div>
+    <div id="overlay">
+        <h1>Organ Synth V3</h1>
+        <p class="desc">Biomedical Gesture Interface</p>
+
+        <div class="control">
+            <label>Select Anatomical Model</label>
+            <select id="modelSelect">
+                <option value="lungs">Lungs (Pulmonary)</option>
+                <option value="heart">Heart (Cardiac)</option>
+            </select>
         </div>
 
-        <div id="lockStatus" class="status-badge">Detecting Hands...</div>
+        <div class="control">
+            <label>Particle Color</label>
+            <input type="color" id="colorPicker" value="#00d4ff">
+        </div>
 
-        <div class="gesture-hint">
-            <strong>✌️ GESTURE:</strong> Raise Index + Middle fingers to <strong>LOCK</strong> the pulse and scale.
+        <div class="status-box">
+            <span class="status-label">Biometric Status</span>
+            <span id="gestureStatus" class="status-val">Waiting...</span>
+        </div>
+
+        <div style="font-size: 0.65rem; margin-top: 15px; opacity: 0.5; line-height: 1.4;">
+            🖐️ Move hand to expand/contract<br>
+            ✌️ Raise index + middle to LOCK position
         </div>
     </div>
 
-    <div id="video-container">
-        <video id="webcam" autoplay playsinline></video>
-    </div>
+    <video id="webcam" playsinline autoplay style="display:none;"></video>
+    <video id="video-preview" playsinline autoplay></video>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
     <script>
-        /** THREE.JS SETUP **/
+        /** 1. THREE.JS SCENE SETUP **/
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearColor(0x050505);
         document.body.appendChild(renderer.domElement);
 
-        const PARTICLE_COUNT = 30000;
-        const geometry = new THREE.BufferGeometry();
+        const PARTICLE_COUNT = 25000;
         const posBuffer = new Float32Array(PARTICLE_COUNT * 3);
         const targetBuffer = new Float32Array(PARTICLE_COUNT * 3);
-        const colorBuffer = new Float32Array(PARTICLE_COUNT * 3);
-        
+        const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(posBuffer, 3));
-        geometry.setAttribute('color', new THREE.BufferAttribute(colorBuffer, 3));
-        
+
         const material = new THREE.PointsMaterial({
-            size: 0.025, vertexColors: true, transparent: true,
-            blending: THREE.AdditiveBlending, opacity: 0.7, depthWrite: false
+            size: 0.03, transparent: true, blending: THREE.AdditiveBlending,
+            depthWrite: false, color: 0x00d4ff
         });
 
         const particles = new THREE.Points(geometry, material);
         scene.add(particles);
-        camera.position.z = 5;
+        camera.position.z = 6;
 
-        /** ANATOMICAL SHAPE GENERATOR (Curved/Rounded) **/
-        function generateHeartPoints() {
+        /** 2. ANATOMICAL MATH (The "Good" Shapes) **/
+        function createOrgan(type) {
+            const targets = targetBuffer;
             for (let i = 0; i < PARTICLE_COUNT; i++) {
-                let x, y, z, r, g, b;
-                const rand = Math.random();
+                let x, y, z;
+                // Random spherical angles
+                const u = Math.random() * Math.PI * 2;
+                const v = Math.random() * Math.PI;
+                const r = Math.pow(Math.random(), 0.3); // Better volume distribution
 
-                // 1. LEFT VENTRICLE (The largest, rounded cone at bottom)
-                if (rand < 0.4) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const radius = Math.pow(Math.random(), 0.5) * 0.8;
-                    const h = Math.random() * 2;
-                    x = radius * Math.cos(angle) * (h/2);
-                    y = -h;
-                    z = radius * Math.sin(angle) * (h/2);
-                    x += 0.3; // Shift to left side
-                    r = 0.9; g = 0.1; b = 0.2;
-                }
-                // 2. RIGHT VENTRICLE (A "C" shape wrap around the left)
-                else if (rand < 0.65) {
-                    const angle = Math.PI * 0.5 + Math.random() * Math.PI; 
-                    const radius = 0.6 + Math.random() * 0.4;
-                    const h = Math.random() * 1.5;
-                    x = radius * Math.cos(angle);
-                    y = -h - 0.2;
-                    z = radius * Math.sin(angle);
-                    r = 0.2; g = 0.4; b = 1.0;
-                }
-                // 3. ATRIA (Oreillettes - Rounded tops)
-                else if (rand < 0.85) {
+                if (type === 'lungs') {
+                    // Two Large Spheroids
                     const isLeft = Math.random() > 0.5;
-                    const u = Math.random() * Math.PI * 2;
-                    const v = Math.random() * Math.PI;
-                    const rad = 0.4 + Math.random() * 0.2;
-                    x = rad * Math.sin(v) * Math.cos(u) + (isLeft ? 0.4 : -0.4);
-                    y = rad * Math.cos(v) + 0.3;
-                    z = rad * Math.sin(v) * Math.sin(u);
-                    r = isLeft ? 0.8 : 0.3; g = 0.2; b = isLeft ? 0.3 : 0.7;
-                }
-                // 4. AORTA (Curved Tube Arch)
-                else {
-                    const t = Math.random() * Math.PI;
-                    const tubeRad = 0.15 + Math.random() * 0.1;
-                    const archRad = 0.7;
-                    x = archRad * Math.cos(t) + tubeRad * Math.cos(Math.random()*Math.PI*2);
-                    y = archRad * Math.sin(t) + 0.8;
-                    z = tubeRad * Math.sin(Math.random()*Math.PI*2);
-                    r = 1.0; g = 0.2; b = 0.1;
+                    const side = isLeft ? 1 : -1;
+                    // Lobe shape: Ellipsoid with inward curve
+                    x = (r * 0.8 * Math.sin(v) * Math.cos(u)) + (1.0 * side);
+                    y = (r * 1.8 * Math.cos(v));
+                    z = (r * 0.8 * Math.sin(v) * Math.sin(u));
+                    // Tilt the lungs slightly
+                    const tilt = 0.2 * side;
+                    const rx = x * Math.cos(tilt) - y * Math.sin(tilt);
+                    const ry = x * Math.sin(tilt) + y * Math.cos(tilt);
+                    x = rx; y = ry;
+                } 
+                else if (type === 'heart') {
+                    const part = Math.random();
+                    if (part < 0.4) { // Left Ventricle (Big rounded bottom)
+                        x = 0.6 * r * Math.sin(v) * Math.cos(u) + 0.3;
+                        y = 1.0 * r * Math.cos(v) - 0.5;
+                        z = 0.6 * r * Math.sin(v) * Math.sin(u);
+                    } else if (part < 0.7) { // Right Ventricle (Thin wrap)
+                        x = 0.7 * r * Math.sin(v) * Math.cos(u) - 0.4;
+                        y = 0.8 * r * Math.cos(v) - 0.4;
+                        z = 0.4 * r * Math.sin(v) * Math.sin(u);
+                    } else if (part < 0.9) { // Atria (Tops)
+                        const isLeftAtria = Math.random() > 0.5;
+                        x = 0.4 * r * Math.sin(v) * Math.cos(u) + (isLeftAtria ? 0.3 : -0.3);
+                        y = 0.4 * r * Math.cos(v) + 0.6;
+                        z = 0.4 * r * Math.sin(v) * Math.sin(u);
+                    } else { // Aorta Arch (Tube)
+                        const t = Math.random() * Math.PI;
+                        const tr = 0.15;
+                        x = 0.6 * Math.cos(t) + (tr * Math.cos(u));
+                        y = 0.6 * Math.sin(t) + 0.8 + (tr * Math.sin(u));
+                        z = tr * Math.sin(v);
+                    }
                 }
 
                 const idx = i * 3;
-                targetBuffer[idx] = x; targetBuffer[idx+1] = y; targetBuffer[idx+2] = z;
-                colorBuffer[idx] = r; colorBuffer[idx+1] = g; colorBuffer[idx+2] = b;
+                targets[idx] = x; targets[idx+1] = y; targets[idx+2] = z;
             }
-            geometry.attributes.color.needsUpdate = true;
         }
 
-        generateHeartPoints();
+        createOrgan('lungs');
 
-        /** HAND TRACKING & GESTURE LOCK **/
-        let handTension = 1.0;
+        /** 3. GESTURE TRACKING **/
+        const videoElement = document.getElementById('webcam');
+        const previewElement = document.getElementById('video-preview');
+        const statusElement = document.getElementById('gestureStatus');
+        let expansion = 1.0;
         let isLocked = false;
-        let lockedBPM = 70;
-        let currentBPM = 70;
 
-        const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6 });
 
         hands.onResults((results) => {
-            const badge = document.getElementById('lockStatus');
-            
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const h = results.multiHandLandmarks[0];
+                const landmarks = results.multiHandLandmarks[0];
                 
-                // Detect Peace Sign (Index: 8 and Middle: 12 extended)
-                const indexUp = h[8].y < h[6].y;
-                const middleUp = h[12].y < h[10].y;
-                const ringDown = h[16].y > h[14].y;
+                // Detection Gesture: Peace Sign ✌️ (Index 8 and Middle 12 up, Ring 16 down)
+                const isPeace = landmarks[8].y < landmarks[6].y && 
+                                landmarks[12].y < landmarks[10].y && 
+                                landmarks[16].y > landmarks[14].y;
 
-                if (indexUp && middleUp && ringDown) {
-                    if (!isLocked) {
-                        isLocked = true;
-                        lockedBPM = currentBPM;
-                    }
-                    badge.innerText = "LOCKED ✌️";
-                    badge.className = "status-badge status-locked";
+                if (isPeace) {
+                    isLocked = true;
+                    statusElement.innerText = "LOCKED ✌️";
+                    statusElement.style.color = "#ffcc00";
                 } else {
                     isLocked = false;
-                    badge.innerText = "TRACKING ACTIVE";
-                    badge.className = "status-badge status-active";
+                    statusElement.innerText = "ACTIVE";
+                    statusElement.style.color = "#00d4ff";
                     
-                    // Standard scaling logic
-                    const dist = Math.hypot(h[4].x - h[8].x, h[4].y - h[8].y);
-                    handTension = THREE.MathUtils.lerp(handTension, 0.5 + dist * 7, 0.1);
-                    currentBPM = 60 + (handTension * 40);
+                    // Expansion based on Thumb (4) to Pinky (20) distance
+                    const d = Math.hypot(landmarks[4].x - landmarks[20].x, landmarks[4].y - landmarks[20].y);
+                    expansion = THREE.MathUtils.lerp(expansion, 0.4 + d * 4, 0.1);
                 }
             } else {
-                badge.innerText = "Detecting Hands...";
-                badge.className = "status-badge";
-                if(!isLocked) handTension = THREE.MathUtils.lerp(handTension, 1.0, 0.05);
+                statusElement.innerText = isLocked ? "LOCKED (No Hand)" : "Searching...";
             }
         });
 
-        const videoElement = document.getElementById('webcam');
         const cameraFeed = new Camera(videoElement, {
-            onFrame: async () => { await hands.send({ image: videoElement }); },
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+                previewElement.srcObject = videoElement.srcObject;
+            },
             width: 640, height: 480
         });
         cameraFeed.start();
 
-        /** UI LOGIC **/
-        const bpmSlider = document.getElementById('bpmSlider');
-        const bpmDisplay = document.getElementById('bpmDisplay');
+        /** 4. INTERFACE LISTENERS **/
+        document.getElementById('modelSelect').addEventListener('change', (e) => createOrgan(e.target.value));
+        document.getElementById('colorPicker').addEventListener('input', (e) => material.color.set(e.target.value));
 
-        /** ANIMATION LOOP **/
+        /** 5. ANIMATION LOOP **/
         let time = 0;
         function animate() {
             requestAnimationFrame(animate);
-            time += 0.016;
+            time += 0.02;
 
-            // Determine BPM Source
-            let activeBPM = isLocked ? lockedBPM : currentBPM;
-            
-            // Check if user is sliding the manual control (if so, override)
-            if (document.activeElement === bpmSlider) {
-                activeBPM = parseInt(bpmSlider.value);
-            } else {
-                bpmSlider.value = activeBPM;
-            }
-            bpmDisplay.innerText = Math.round(activeBPM) + " BPM";
-
-            // Precise Cardiac Pulse Logic
-            const beatFreq = (activeBPM / 60) * Math.PI * 2;
-            // Double-thump pulse (Systole/Diastole)
-            const pulse = (Math.pow(Math.sin(time * beatFreq), 6) * 0.15) + 
-                          (Math.pow(Math.sin(time * beatFreq + 0.4), 10) * 0.05);
-            
             const pos = geometry.attributes.position.array;
+            const currentModel = document.getElementById('modelSelect').value;
+
+            // Breathing / Heartbeat frequency
+            const pulseFreq = currentModel === 'lungs' ? 1.5 : 4.0;
+            const pulseIntensity = currentModel === 'lungs' ? 0.15 : 0.05;
+            const pulse = 1 + Math.sin(time * pulseFreq) * pulseIntensity;
+
             for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
-                const target = targetBuffer[i] * (handTension + pulse);
-                pos[i] += (target - pos[i]) * 0.15;
+                // Smoothly move particles to their anatomical targets
+                const target = targetBuffer[i] * expansion * pulse;
+                pos[i] += (target - pos[i]) * 0.1;
             }
-            
+
             geometry.attributes.position.needsUpdate = true;
-            particles.rotation.y += 0.003;
+            particles.rotation.y += 0.005;
 
             renderer.render(scene, camera);
         }
 
+        animate();
+
+        // Responsive resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
-        animate();
     </script>
 </body>
 </html>
