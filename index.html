@@ -3,61 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Anatomical Heart Gesture Control</title>
+    <title>Anatomical Heart V2 - Gesture Control</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Inter', -apple-system, sans-serif; }
         canvas { display: block; }
 
+        /* Modern Glassmorphism UI */
         #ui-panel {
-            position: absolute; top: 20px; left: 20px;
-            background: rgba(20, 20, 20, 0.7); backdrop-filter: blur(15px);
-            border-radius: 15px; padding: 25px; color: white;
-            border: 1px solid rgba(255, 255, 255, 0.1); z-index: 100; width: 280px;
+            position: absolute; top: 30px; left: 30px;
+            background: rgba(15, 15, 15, 0.8); backdrop-filter: blur(20px);
+            border-radius: 20px; padding: 25px; color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1); z-index: 100; width: 300px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
 
-        h2 { margin: 0 0 5px 0; font-weight: 300; letter-spacing: 2px; color: #ff3e3e; }
-        .subtitle { font-size: 0.7rem; opacity: 0.6; margin-bottom: 20px; text-transform: uppercase; }
+        h2 { margin: 0; font-weight: 600; font-size: 1.4rem; color: #ff4d4d; letter-spacing: -0.5px; }
+        .subtitle { font-size: 0.7rem; opacity: 0.5; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; }
         
-        .control-group { margin-bottom: 15px; }
-        label { display: block; font-size: 0.75rem; margin-bottom: 5px; color: #aaa; }
+        .control-group { margin-bottom: 20px; }
+        label { display: block; font-size: 0.75rem; margin-bottom: 8px; color: #eee; }
         
-        select {
-            width: 100%; background: #1a1a1a; border: 1px solid #333;
-            color: white; padding: 10px; border-radius: 5px; cursor: pointer;
+        input[type="range"] { width: 100%; accent-color: #ff4d4d; cursor: pointer; }
+        
+        .status-badge {
+            display: inline-block; padding: 4px 10px; border-radius: 50px;
+            font-size: 0.65rem; font-weight: bold; background: #333; margin-top: 10px;
         }
+        .status-active { background: #00ff88; color: #000; }
+        .status-locked { background: #4da6ff; color: #000; }
 
         #video-container {
-            position: absolute; bottom: 20px; right: 20px;
-            width: 180px; height: 135px; border-radius: 12px;
-            overflow: hidden; border: 2px solid #ff3e3e; transform: scaleX(-1);
+            position: absolute; bottom: 30px; right: 30px;
+            width: 220px; height: 165px; border-radius: 15px;
+            overflow: hidden; border: 2px solid rgba(255,255,255,0.1);
+            transform: scaleX(-1);
         }
         video { width: 100%; height: 100%; object-fit: cover; }
         
-        .stats { margin-top: 15px; padding-top: 15px; border-top: 1px solid #333; }
-        .stat-item { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 5px; }
-        .val { color: #ff3e3e; font-family: monospace; font-weight: bold; }
+        .gesture-hint {
+            font-size: 0.75rem; background: rgba(255,255,255,0.05);
+            padding: 10px; border-radius: 10px; margin-top: 15px; border-left: 3px solid #ff4d4d;
+        }
     </style>
 </head>
 <body>
 
     <div id="ui-panel">
-        <h2>CARDIAC CORE</h2>
-        <div class="subtitle">Anatomical Particle System</div>
+        <h2>ANATOMICAL CORE</h2>
+        <div class="subtitle">Procedural Organ Rendering</div>
         
         <div class="control-group">
-            <label>Visualization Template</label>
-            <select id="shapeSelector">
-                <option value="anatomical">Anatomical Heart (Chambers)</option>
-                <option value="heart">Abstract Heart</option>
-                <option value="saturn">Energy Ring</option>
-                <option value="fireworks">Cellular Burst</option>
-            </select>
+            <label>Manual Pulse Override (BPM)</label>
+            <input type="range" id="bpmSlider" min="40" max="180" value="70">
+            <div style="display: flex; justify-content: space-between; font-size: 0.7rem; margin-top: 5px; opacity: 0.6;">
+                <span>40</span> <span id="bpmDisplay">70 BPM</span> <span>180</span>
+            </div>
         </div>
 
-        <div class="stats">
-            <div class="stat-item"><span>Status:</span> <span id="gestureStatus" class="val">Initializing...</span></div>
-            <div class="stat-item"><span>Heart Rate (Sim):</span> <span id="bpmVal" class="val">60 BPM</span></div>
-            <div class="stat-item"><span>Hand Tension:</span> <span id="tensionVal" class="val">1.0x</span></div>
+        <div id="lockStatus" class="status-badge">Detecting Hands...</div>
+
+        <div class="gesture-hint">
+            <strong>✌️ GESTURE:</strong> Raise Index + Middle fingers to <strong>LOCK</strong> the pulse and scale.
         </div>
     </div>
 
@@ -75,123 +81,126 @@
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x050505);
         document.body.appendChild(renderer.domElement);
 
-        const PARTICLE_COUNT = 20000;
+        const PARTICLE_COUNT = 30000;
+        const geometry = new THREE.BufferGeometry();
         const posBuffer = new Float32Array(PARTICLE_COUNT * 3);
         const targetBuffer = new Float32Array(PARTICLE_COUNT * 3);
         const colorBuffer = new Float32Array(PARTICLE_COUNT * 3);
         
-        const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(posBuffer, 3));
         geometry.setAttribute('color', new THREE.BufferAttribute(colorBuffer, 3));
         
         const material = new THREE.PointsMaterial({
-            size: 0.035,
-            vertexColors: true,
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-            opacity: 0.8
+            size: 0.025, vertexColors: true, transparent: true,
+            blending: THREE.AdditiveBlending, opacity: 0.7, depthWrite: false
         });
 
         const particles = new THREE.Points(geometry, material);
         scene.add(particles);
-        camera.position.z = 6;
+        camera.position.z = 5;
 
-        /** ANATOMICAL GENERATOR **/
-        function setAnatomicalHeart() {
-            const pos = targetBuffer;
-            const cols = colorBuffer;
-            
+        /** ANATOMICAL SHAPE GENERATOR (Curved/Rounded) **/
+        function generateHeartPoints() {
             for (let i = 0; i < PARTICLE_COUNT; i++) {
                 let x, y, z, r, g, b;
-                const section = Math.random();
+                const rand = Math.random();
 
-                // 1. Right Ventricle (Ventricule Droit) - Blue-ish
-                if (section < 0.25) {
-                    x = -0.8 + Math.random() * 0.7;
-                    y = -1.5 + Math.random() * 1.5;
-                    z = Math.random() * 0.8;
+                // 1. LEFT VENTRICLE (The largest, rounded cone at bottom)
+                if (rand < 0.4) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = Math.pow(Math.random(), 0.5) * 0.8;
+                    const h = Math.random() * 2;
+                    x = radius * Math.cos(angle) * (h/2);
+                    y = -h;
+                    z = radius * Math.sin(angle) * (h/2);
+                    x += 0.3; // Shift to left side
+                    r = 0.9; g = 0.1; b = 0.2;
+                }
+                // 2. RIGHT VENTRICLE (A "C" shape wrap around the left)
+                else if (rand < 0.65) {
+                    const angle = Math.PI * 0.5 + Math.random() * Math.PI; 
+                    const radius = 0.6 + Math.random() * 0.4;
+                    const h = Math.random() * 1.5;
+                    x = radius * Math.cos(angle);
+                    y = -h - 0.2;
+                    z = radius * Math.sin(angle);
                     r = 0.2; g = 0.4; b = 1.0;
-                } 
-                // 2. Left Ventricle (Ventricule Gauche) - Deep Red
-                else if (section < 0.55) {
-                    x = 0.1 + Math.random() * 0.9;
-                    y = -1.8 + Math.random() * 1.8;
-                    z = Math.random() * 1.0;
-                    r = 1.0; g = 0.1; b = 0.2;
                 }
-                // 3. Atria (Oreillettes) - Higher up
-                else if (section < 0.80) {
+                // 3. ATRIA (Oreillettes - Rounded tops)
+                else if (rand < 0.85) {
                     const isLeft = Math.random() > 0.5;
-                    x = isLeft ? 0.6 : -0.6;
-                    y = 0.5 + Math.random() * 0.8;
-                    z = Math.random() * 0.6;
-                    x += (Math.random() - 0.5) * 0.5;
-                    r = isLeft ? 0.8 : 0.3; g = 0.2; b = isLeft ? 0.3 : 0.8;
+                    const u = Math.random() * Math.PI * 2;
+                    const v = Math.random() * Math.PI;
+                    const rad = 0.4 + Math.random() * 0.2;
+                    x = rad * Math.sin(v) * Math.cos(u) + (isLeft ? 0.4 : -0.4);
+                    y = rad * Math.cos(v) + 0.3;
+                    z = rad * Math.sin(v) * Math.sin(u);
+                    r = isLeft ? 0.8 : 0.3; g = 0.2; b = isLeft ? 0.3 : 0.7;
                 }
-                // 4. Aorta & Vessels (Large tubes)
+                // 4. AORTA (Curved Tube Arch)
                 else {
-                    x = (Math.random() - 0.5) * 0.4;
-                    y = 1.0 + Math.random() * 1.5;
-                    z = -0.2 + (Math.random() - 0.5) * 0.4;
-                    r = 0.9; g = 0.1; b = 0.1;
+                    const t = Math.random() * Math.PI;
+                    const tubeRad = 0.15 + Math.random() * 0.1;
+                    const archRad = 0.7;
+                    x = archRad * Math.cos(t) + tubeRad * Math.cos(Math.random()*Math.PI*2);
+                    y = archRad * Math.sin(t) + 0.8;
+                    z = tubeRad * Math.sin(Math.random()*Math.PI*2);
+                    r = 1.0; g = 0.2; b = 0.1;
                 }
 
                 const idx = i * 3;
-                pos[idx] = x; pos[idx+1] = y; pos[idx+2] = z;
-                cols[idx] = r; cols[idx+1] = g; cols[idx+2] = b;
+                targetBuffer[idx] = x; targetBuffer[idx+1] = y; targetBuffer[idx+2] = z;
+                colorBuffer[idx] = r; colorBuffer[idx+1] = g; colorBuffer[idx+2] = b;
             }
             geometry.attributes.color.needsUpdate = true;
         }
 
-        // Other shapes for the morphing system
-        function setOtherShape(type) {
-            const pos = targetBuffer;
-            const cols = colorBuffer;
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const t = Math.random() * Math.PI * 2;
-                const u = Math.random() * 2 - 1;
-                let x, y, z;
+        generateHeartPoints();
 
-                if (type === 'heart') {
-                    const phi = Math.random() * Math.PI * 2;
-                    x = 16 * Math.pow(Math.sin(phi), 3) * 0.1;
-                    y = (13 * Math.cos(phi) - 5 * Math.cos(2*phi) - 2 * Math.cos(3*phi) - Math.cos(4*phi)) * 0.1;
-                    z = (Math.random() - 0.5) * 0.5;
-                } else {
-                    x = Math.sqrt(1 - u * u) * Math.cos(t) * 2;
-                    y = Math.sqrt(1 - u * u) * Math.sin(t) * 2;
-                    z = u * 2;
-                }
-                pos[i*3] = x; pos[i*3+1] = y; pos[i*3+2] = z;
-                cols[i*3] = 1; cols[i*3+1] = 0.2; cols[i*3+2] = 0.3;
-            }
-            geometry.attributes.color.needsUpdate = true;
-        }
-
-        setAnatomicalHeart();
-
-        /** HAND TRACKING **/
+        /** HAND TRACKING & GESTURE LOCK **/
         let handTension = 1.0;
+        let isLocked = false;
+        let lockedBPM = 70;
+        let currentBPM = 70;
+
         const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5 });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
 
         hands.onResults((results) => {
-            const status = document.getElementById('gestureStatus');
-            const tensionDisp = document.getElementById('tensionVal');
+            const badge = document.getElementById('lockStatus');
             
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                status.innerText = "CONNECTED";
                 const h = results.multiHandLandmarks[0];
-                // Distance thumb to index
-                const dist = Math.hypot(h[4].x - h[8].x, h[4].y - h[8].y);
-                handTension = THREE.MathUtils.lerp(handTension, 0.5 + dist * 8, 0.1);
-                tensionDisp.innerText = handTension.toFixed(1) + "x";
+                
+                // Detect Peace Sign (Index: 8 and Middle: 12 extended)
+                const indexUp = h[8].y < h[6].y;
+                const middleUp = h[12].y < h[10].y;
+                const ringDown = h[16].y > h[14].y;
+
+                if (indexUp && middleUp && ringDown) {
+                    if (!isLocked) {
+                        isLocked = true;
+                        lockedBPM = currentBPM;
+                    }
+                    badge.innerText = "LOCKED ✌️";
+                    badge.className = "status-badge status-locked";
+                } else {
+                    isLocked = false;
+                    badge.innerText = "TRACKING ACTIVE";
+                    badge.className = "status-badge status-active";
+                    
+                    // Standard scaling logic
+                    const dist = Math.hypot(h[4].x - h[8].x, h[4].y - h[8].y);
+                    handTension = THREE.MathUtils.lerp(handTension, 0.5 + dist * 7, 0.1);
+                    currentBPM = 60 + (handTension * 40);
+                }
             } else {
-                status.innerText = "SEARCHING...";
-                handTension = THREE.MathUtils.lerp(handTension, 1.0, 0.05);
+                badge.innerText = "Detecting Hands...";
+                badge.className = "status-badge";
+                if(!isLocked) handTension = THREE.MathUtils.lerp(handTension, 1.0, 0.05);
             }
         });
 
@@ -202,44 +211,52 @@
         });
         cameraFeed.start();
 
-        /** ANIMATION & BEAT LOGIC **/
+        /** UI LOGIC **/
+        const bpmSlider = document.getElementById('bpmSlider');
+        const bpmDisplay = document.getElementById('bpmDisplay');
+
+        /** ANIMATION LOOP **/
         let time = 0;
         function animate() {
             requestAnimationFrame(animate);
-            time += 0.02;
+            time += 0.016;
 
-            // Calculate Heartbeat (Pulse)
-            // Faster hand tension = Faster heart rate
-            const bpm = 60 * handTension;
-            document.getElementById('bpmVal').innerText = Math.round(bpm) + " BPM";
+            // Determine BPM Source
+            let activeBPM = isLocked ? lockedBPM : currentBPM;
             
-            const beatFreq = (bpm / 60) * Math.PI * 2;
-            const pulse = Math.pow(Math.sin(time * beatFreq), 4) * 0.2; // Rhythmic thump
+            // Check if user is sliding the manual control (if so, override)
+            if (document.activeElement === bpmSlider) {
+                activeBPM = parseInt(bpmSlider.value);
+            } else {
+                bpmSlider.value = activeBPM;
+            }
+            bpmDisplay.innerText = Math.round(activeBPM) + " BPM";
+
+            // Precise Cardiac Pulse Logic
+            const beatFreq = (activeBPM / 60) * Math.PI * 2;
+            // Double-thump pulse (Systole/Diastole)
+            const pulse = (Math.pow(Math.sin(time * beatFreq), 6) * 0.15) + 
+                          (Math.pow(Math.sin(time * beatFreq + 0.4), 10) * 0.05);
             
-            const positions = geometry.attributes.position.array;
+            const pos = geometry.attributes.position.array;
             for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
                 const target = targetBuffer[i] * (handTension + pulse);
-                positions[i] += (target - positions[i]) * 0.1;
+                pos[i] += (target - pos[i]) * 0.15;
             }
             
             geometry.attributes.position.needsUpdate = true;
-            particles.rotation.y += 0.005;
+            particles.rotation.y += 0.003;
 
             renderer.render(scene, camera);
         }
-
-        document.getElementById('shapeSelector').addEventListener('change', (e) => {
-            if(e.target.value === 'anatomical') setAnatomicalHeart();
-            else setOtherShape(e.target.value);
-        });
-
-        animate();
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        animate();
     </script>
 </body>
 </html>
